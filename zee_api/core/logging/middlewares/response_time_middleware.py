@@ -4,7 +4,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from z_api.core.logging.contexts.response_time_context import set_response_time
+from zee_api.core.logging.contexts.response_time_context import set_response_time
 
 
 class ResponseTimeMiddleware(BaseHTTPMiddleware):

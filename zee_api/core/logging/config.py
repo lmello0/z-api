@@ -6,11 +6,13 @@ from typing import Optional
 
 import yaml
 
-from z_api.core.config.settings import Settings
-from z_api.core.exceptions.invalid_config_file_error import InvalidConfigFileError
-from z_api.core.logging.filters.response_time_filter import ResponseTimeLogFilter
-from z_api.core.logging.filters.trace_id_filter import TraceIdLogFilter
-from z_api.utils.deep_merge_dicts import deep_merge_dicts
+from zee_api.core.config.settings import Settings
+from zee_api.core.exceptions.invalid_config_file_error import (
+    InvalidConfigFileError,
+)
+from zee_api.core.logging.filters.response_time_filter import ResponseTimeLogFilter
+from zee_api.core.logging.filters.trace_id_filter import TraceIdLogFilter
+from zee_api.utils.deep_merge_dicts import deep_merge_dicts
 
 
 class LogConfig:
@@ -80,6 +82,8 @@ class LogConfig:
         if extra:
             merged = deep_merge_dicts(merged, extra)
 
+        merged = self._auto_apply_filters(merged)
+
         if apply:
             logging.config.dictConfig(merged)
             logging.captureWarnings(True)
@@ -97,5 +101,40 @@ class LogConfig:
 
         if config is not None and not isinstance(config, dict):
             raise InvalidConfigFileError(log_path)
+
+        return config or {}
+
+    def _auto_apply_filters(self, config: dict) -> dict:
+        """
+        Automatically apply all defined filters to handlers that don't explicitly disable them.
+
+        Handlers can opt-out of auto-applying filters by setting:
+        - "auto_filters": false  (disables all auto-filters)
+        - "exclude_filters": ["filter_name"]  (excludes specific filters)
+        """
+        if "filters" not in config or "handlers" not in config:
+            return config
+
+        all_filter_names = set(config["filters"].keys())
+
+        for handler_name, handler_config in config["handlers"].items():
+            auto_filters = handler_config.pop("auto_filters", True)
+            if not auto_filters:
+                continue
+
+            excluded = set(handler_config.pop("exclude_filters", []))
+
+            existing_filters = handler_config.get("filters", [])
+            if not isinstance(existing_filters, list):
+                existing_filters = []
+
+            existing_filters_set = set(existing_filters)
+
+            filters_to_add = all_filter_names - excluded - existing_filters_set
+
+            if filters_to_add or existing_filters:
+                handler_config["filters"] = existing_filters + sorted(
+                    list(filters_to_add)
+                )
 
         return config

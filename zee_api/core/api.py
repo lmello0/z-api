@@ -3,31 +3,29 @@ from typing import Optional
 
 from fastapi import FastAPI
 
-from z_api.core.config.settings import Settings
-from z_api.core.logging.config import LogConfig
-from z_api.core.plugin.plugin import activate_plugins
+from zee_api.core.config.settings import Settings
+from zee_api.core.logging.config import LogConfig
 
 
 def create_app(*, settings: Optional[Settings] = None) -> FastAPI:
+    """
+    Create a FastAPI instance using given settings.
+
+    Args:
+        settings: A instance of `z_api.Settings`
+
+    Returns
+        A FastAPI instance
+    """
+
     settings = settings or Settings()
 
     log_config = LogConfig(settings)
     log_config.configure()
 
-    active_plugins = []
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal active_plugins
-        active_plugins = activate_plugins(app, settings)
-
-        try:
-            yield
-        finally:
-            for p in reversed(active_plugins):
-                fn = getattr(p, "on_shutdown", False)
-                if callable(fn):
-                    await fn(app)
+        yield
 
     app = FastAPI(
         title=settings.app_name,

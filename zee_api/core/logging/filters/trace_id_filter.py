@@ -1,6 +1,6 @@
 import logging
 
-from z_api.core.logging.contexts.trace_id_context import get_trace_id
+from zee_api.core.logging.contexts.trace_id_context import get_trace_id
 
 
 class TraceIdLogFilter(logging.Filter):

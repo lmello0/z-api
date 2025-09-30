@@ -4,7 +4,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from z_api.core.logging.contexts.trace_id_context import set_trace_id
+from zee_api.core.logging.contexts.trace_id_context import set_trace_id
 
 
 class TraceIdMiddleware(BaseHTTPMiddleware):
