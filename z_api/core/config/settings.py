@@ -8,6 +8,8 @@ class Settings(BaseSettings):
 
     context_path: str = "/z-api"
 
+    log_config_path: str = "resources/logging.yaml"
+
     class Config:
         env_prefix = "APP_"
         case_sensitive = False
