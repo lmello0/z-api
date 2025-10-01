@@ -8,6 +8,8 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 
+from zee_api.extensions.http.settings import HttpSettings
+
 
 class LogConfig(BaseModel):
     log_level: str = "INFO"
@@ -23,6 +25,8 @@ class Settings(BaseSettings):
     app_context_path: str = "/z-api"
 
     log_config: LogConfig = LogConfig()
+
+    http_config: HttpSettings = HttpSettings()
 
     model_config = SettingsConfigDict(
         env_prefix="APP_",
