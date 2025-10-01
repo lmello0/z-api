@@ -1,16 +1,20 @@
 import logging
 import logging.config
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Optional
 
 import yaml
 
-from zee_api.core.config.settings import Settings
+from zee_api.core.config.settings import Settings, get_app_settings
 from zee_api.core.exceptions.invalid_config_file_error import (
     InvalidConfigFileError,
 )
-from zee_api.core.logging.context.log_context_registry import LogContextRegistry
+from zee_api.core.logging.context.log_context_registry import (
+    LogContextRegistry,
+    get_log_context_registry,
+)
 from zee_api.utils.deep_merge_dicts import deep_merge_dicts
 
 
@@ -99,7 +103,7 @@ class LogConfigurator:
         Returns:
             The current configuration dict
         """
-        custom = self._load_custom_config_file(self.settings.log_config_path)
+        custom = self._load_custom_config_file(self.settings.log_config.log_config_path)
         merged = deep_merge_dicts(self.BASE_LOG_CONFIG, custom)
 
         if extra:
@@ -162,3 +166,11 @@ class LogConfigurator:
                 )
 
         return config
+
+
+@lru_cache
+def get_log_configurator() -> LogConfigurator:
+    settings = get_app_settings()
+    context_registry = get_log_context_registry()
+
+    return LogConfigurator(settings, context_registry)
