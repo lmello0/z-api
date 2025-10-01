@@ -10,6 +10,7 @@ from zee_api.core.logging.context.log_context_registry import (
     get_log_context_registry,
 )
 from zee_api.core.logging.log_configurator import get_log_configurator
+from zee_api.extensions.tasks.task_registry import get_task_registry
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def create_app_with_defaults(
     lifespan: Optional[Callable[[Any], Any]] = None,
     title: Optional[str] = None,
     extra_middlewares: Optional[list] = None,
+    tasks_package: Optional[str] = None,
 ) -> FastAPI:
     """
     Create a FastAPI instance with the default configuration for Zee API.
@@ -46,13 +48,25 @@ def create_app_with_defaults(
     log_configurator.configure()
 
     if lifespan is None:
+
         @asynccontextmanager
         async def default_lifespan(app: FastAPI):
             logger.info("Starting app")
 
+            if tasks_package:
+                task_registry = get_task_registry()
+
+                task_registry.discover_tasks(tasks_package)
+                task_registry.setup_all_tasks()
+
+                task_registry.start_scheduler()
+
             yield
 
             logger.info("Shutting down app...")
+
+            task_registry = get_task_registry()
+            task_registry.shutdown_scheduler()
 
         lifespan = default_lifespan
 
