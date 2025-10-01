@@ -72,7 +72,7 @@ class HttpxClient(Extension):
         if self._owns_client:
             await self._client.aclose()
 
-    async def _request(
+    async def request(
         self,
         method: Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
         url: str,
@@ -187,7 +187,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="GET",
             url=url,
             headers=headers,
@@ -224,7 +224,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="POST",
             url=url,
             headers=headers,
@@ -263,7 +263,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="PUT",
             url=url,
             headers=headers,
@@ -302,7 +302,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="PATCH",
             url=url,
             headers=headers,
@@ -341,7 +341,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="DELETE",
             url=url,
             headers=headers,
@@ -380,7 +380,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="HEAD",
             url=url,
             headers=headers,
@@ -419,7 +419,7 @@ class HttpxClient(Extension):
         Returns:
             httpx.Response: The HTTP response.
         """
-        return await self._request(
+        return await self.request(
             method="OPTIONS",
             url=url,
             headers=headers,
