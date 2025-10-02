@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
+from pydantic_settings import BaseSettings, YamlConfigSettingsSource
 
 
-class SpringYamlSettingsSource(PydanticBaseSettingsSource):
+class SpringYamlSettingsSource(YamlConfigSettingsSource):
     """Custom settings source that reads YAML and substitutes environment variables."""
 
     def __init__(self, settings_cls: type[BaseSettings]):
