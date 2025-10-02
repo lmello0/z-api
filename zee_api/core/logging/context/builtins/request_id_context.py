@@ -13,7 +13,7 @@ class RequestIdContext(LogContext):
 
     def extract_from_request(self, request: Request) -> str:
         """Generate a unique request ID."""
-        return str(uuid.uuid4())
+        return request.headers.get("x-request-id", str(uuid.uuid4()))
 
     def prepare_response(self, response: Response, value: str) -> None:
         """Add request_id to response headers."""
