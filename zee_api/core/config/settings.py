@@ -5,9 +5,9 @@ from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
-    YamlConfigSettingsSource,
 )
 
+from zee_api.core.config.spring_yaml_settings_source import SpringYamlSettingsSource
 from zee_api.extensions.http.settings import HttpSettings
 
 
@@ -16,13 +16,15 @@ class LogConfig(BaseModel):
     log_config_path: str = "resources/logging.yaml"
     log_contexts: list[str] = ["correlation_id", "request_id", "trace_id", "user_id"]
 
+    model_config = SettingsConfigDict(frozen=True, extra="allow", case_sensitive=False)
+
 
 class Settings(BaseSettings):
-    app_name: str = "Z-API"
+    app_name: str = "Zee-API"
     app_version: str = "0.1.0"
     app_env: str = "dev"
 
-    app_context_path: str = "/z-api"
+    app_context_path: str = "/zee-api"
 
     log_config: LogConfig = LogConfig()
 
@@ -45,7 +47,13 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (YamlConfigSettingsSource(settings_cls),)
+        """
+        Priority (highest to lowest):
+        1. Environment variables
+        2. Init settings (constructor arguments)
+        3. YAML file
+        """
+        return (env_settings, init_settings, SpringYamlSettingsSource(settings_cls))
 
 
 @lru_cache
