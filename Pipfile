@@ -51,6 +51,8 @@ uvicorn = "==0.37.0"
 httpx = "*"
 tenacity = "*"
 apscheduler = "*"
+pytest = "*"
+pytest-cov = "*"
 
 [dev-packages]
 
