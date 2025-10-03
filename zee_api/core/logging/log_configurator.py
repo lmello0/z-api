@@ -155,6 +155,7 @@ class LogConfigurator:
             existing_filters = handler_config.get("filters", [])
             if not isinstance(existing_filters, list):
                 existing_filters = []
+                handler_config["filters"] = existing_filters
 
             existing_filter_set = set(existing_filters)
 
