@@ -1,130 +1,82 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Callable, Optional, Self
+from datetime import datetime
+from typing import Any, Optional, Type
 
-from fastapi import APIRouter, FastAPI
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ExceptionHandler
+from fastapi import FastAPI
 
-from zee_api.core.config.settings import get_app_settings
-from zee_api.core.logging.context.log_context_registry import (
-    get_log_context_registry,
-)
+from zee_api.core.config.settings import Settings
+from zee_api.core.extension_manager.base_extension import BaseExtension
+from zee_api.core.extension_manager.extension_manager import ExtensionManager
+from zee_api.core.logging.context.log_context_registry import get_log_context_registry
 from zee_api.core.logging.log_configurator import get_log_configurator
-from zee_api.extensions.tasks.task_registry import get_task_registry
 
 logger = logging.getLogger(__name__)
 
 
 class ZeeApi:
-    def __init__(
-        self,
-    ):
-        self.settings = get_app_settings()
-        self.app = None
+    def __init__(self) -> None:
+        self.settings = Settings()
+        self._extension_configs = {}
+        self.extension_manager = ExtensionManager()
 
-        self._log_context_registry = None
-        self._log_configurator = None
-
-        self._lifespan = None
-
-        self._task_registry = None
-
-        self._middlewares = []
-        self._routes = []
-        self._exception_handlers = []
-
-    def configure_default_logging(self) -> Self:
-        self._log_context_registry = get_log_context_registry()
+        log_context_registry = get_log_context_registry()
         for context in self.settings.log_config.log_contexts:
-            self._log_context_registry.register_builtin(context)
+            log_context_registry.register_builtin(context)
 
-        self._log_configurator = get_log_configurator()
-        self._log_configurator.configure()
+        log_configurator = get_log_configurator()
+        log_configurator.configure()
 
-        return self
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            await self.extension_manager.init_all(self._extension_configs)
 
-    def add_task_scheduler(self, tasks_package: str) -> Self:
-        self._task_registry = get_task_registry()
+            yield
 
-        self._task_registry.discover_tasks(tasks_package)
-        self._task_registry.setup_all_tasks()
+            await self.extension_manager.cleanup_all()
 
-        return self
-
-    def add_lifespan(
-        self,
-        use_default: bool = True,
-        lifespan: Optional[Callable[[Any], Any]] = None,
-    ) -> Self:
-        if use_default:
-
-            @asynccontextmanager
-            async def default_lifespan(app: FastAPI):
-                if self._task_registry:
-                    self._task_registry.start_scheduler()
-
-                yield
-
-                if self._task_registry:
-                    self._task_registry.shutdown_scheduler()
-
-            self.lifespan = default_lifespan
-            return self
-
-        if not lifespan:
-            raise ValueError(
-                "If use_default equals False, a lifespan function is required"
-            )
-
-        self.lifespan = lifespan
-
-        return self
-
-    def add_middleware(self, middleware: BaseHTTPMiddleware) -> Self:
-        self._middlewares.append(middleware)
-
-        return self
-
-    def add_route(self, api_router: APIRouter) -> Self:
-        self._routes.append(api_router)
-
-        return self
-
-    def add_exception_handler(
-        self, exception_class: int | type[Exception], handler: ExceptionHandler
-    ) -> Self:
-        self._exception_handlers.append((exception_class, handler))
-
-        return self
-
-    def build(
-        self,
-        title: Optional[str] = None,
-        docs_url: Optional[str] = None,
-        redoc_url: Optional[str] = None,
-        openapi_url: Optional[str] = None,
-    ) -> FastAPI:
         self.app = FastAPI(
-            title=title or self.settings.app_name,
-            docs_url=docs_url or f"{self.settings.app_context_path}/swagger",
-            redoc_url=redoc_url or f"{self.settings.app_context_path}/redoc",
-            openapi_url=openapi_url or f"{self.settings.app_context_path}/openapi",
-            lifespan=self.lifespan,
+            title=self.settings.app_name,
+            version=self.settings.app_version,
+            docs_url=f"{self.settings.app_context_path}/swagger",
+            redoc_url=f"{self.settings.app_context_path}/redoc",
+            openapi_url=f"{self.settings.app_context_path}/openapi",
+            lifespan=lifespan,
         )
 
-        if self._log_context_registry:
-            log_middlewares = self._log_context_registry.get_all_middlewares()
-            for _, middleware_class in log_middlewares.items():
-                self.app.add_middleware(middleware_class)
+        self._setup_routes()
 
-        for middleware in self._middlewares:
-            self.app.add_middleware(middleware)
+    def add_extension(
+        self,
+        name: str,
+        extension_class: Type[BaseExtension],
+        config: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Add an extension to ZeeAPI"""
+        extension = extension_class(self.app)
 
-        for router in self._routes:
-            self.app.include_router(router)
+        self.extension_manager.register(name, extension)
 
-        for clazz, handler in self._exception_handlers:
-            self.app.add_exception_handler(clazz, handler)
+        if config:
+            self._extension_configs[name] = config
 
-        return self.app
+    def configure(self, config: dict[str, Any]) -> None:
+        """Configure all extensions"""
+        self._extension_configs.update(config)
+
+    def _setup_routes(self) -> None:
+        """Setup routes"""
+
+        @self.app.get("/healthz")
+        async def healthcheck():
+            """Framework health endpoint"""
+            return {"status": "UP", "timestamp": datetime.now().isoformat()}
+
+        @self.app.get("/extensions")
+        async def list_extensions():
+            """List all registered extensions"""
+            return {"extensions": list(self.extension_manager.extensions.keys())}
+
+    def get_extension(self, name: str) -> BaseExtension:
+        """Get extension for use in routes"""
+        return self.extension_manager.get(name)

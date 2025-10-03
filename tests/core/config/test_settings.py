@@ -24,7 +24,6 @@ def test_defaults_without_yaml_file(monkeypatch, tmp_path: Path):
     assert s.app_env == "dev"
     assert s.app_context_path == "/zee-api"
     assert isinstance(s.log_config, LogConfig)
-    assert hasattr(s, "http_config")
 
 
 def test_yaml_values_are_applied_and_extra_allowed(monkeypatch, tmp_path: Path):

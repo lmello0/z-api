@@ -8,7 +8,6 @@ from pydantic_settings import (
 )
 
 from zee_api.core.config.spring_yaml_settings_source import SpringYamlSettingsSource
-from zee_api.extensions.http.settings import HttpSettings
 
 
 class LogConfig(BaseModel):
@@ -27,8 +26,6 @@ class Settings(BaseSettings):
     app_context_path: str = "/zee-api"
 
     log_config: LogConfig = LogConfig()
-
-    http_config: HttpSettings = HttpSettings()
 
     model_config = SettingsConfigDict(
         env_prefix="APP_",
