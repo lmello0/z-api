@@ -1,6 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class TimeoutSettings(BaseModel):
@@ -26,7 +27,7 @@ class WaitSettings(BaseModel):
     increment_step: float = 0.5
 
 
-class HttpSettings(BaseModel):
+class HttpSettings(BaseSettings):
     verify_ssl: bool = False
     max_connections: int = 100
     max_keepalive_connections: int = 20
@@ -35,3 +36,5 @@ class HttpSettings(BaseModel):
     follow_redirects: bool = True
     timeout: TimeoutSettings = TimeoutSettings()
     wait: WaitSettings = WaitSettings()
+
+    model_config = SettingsConfigDict(frozen=True, extra="ignore")

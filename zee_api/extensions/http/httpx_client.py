@@ -1,8 +1,9 @@
 import asyncio
-from functools import lru_cache
+import logging
 from typing import Any, Literal, Mapping, Optional, Sequence
 
 import httpx
+from fastapi import FastAPI
 from starlette import status
 from tenacity import (
     retry,
@@ -17,11 +18,14 @@ from tenacity import (
 )
 from tenacity.wait import wait_base
 
-from zee_api.extensions.extension import Extension
+from zee_api.core.extension_manager.base_extension import BaseExtension
 from zee_api.extensions.http.settings import HttpSettings, WaitSettings
 
+# TODO: add logs
+logger = logging.getLogger(__name__)
 
-class HttpxClient(Extension):
+
+class HttpxClient(BaseExtension):
     """
     An HTTP client extension built on top of httpx.AsyncClient with support for retries, timeouts, and concurrency control.
 
@@ -34,43 +38,48 @@ class HttpxClient(Extension):
         default_wait (wait_base): Default wait policy for retries.
     """
 
-    def __init__(
-        self,
-        settings: HttpSettings,
-        client: Optional[httpx.AsyncClient] = None,
-    ) -> None:
-        self._owns_client = client is None
+    def __init__(self, app: Optional[FastAPI] = None) -> None:
+        super().__init__(app)
+        self._client: Optional[httpx.AsyncClient] = None
+        self.config: Optional[HttpSettings] = None
+
+    async def init(self, config: dict[str, Any]) -> None:
+        """Initialize HTTPX Client"""
+        self.config = HttpSettings(**config)
+        logger.info(f"Initializing HttpxClient with configs: {self.config}")
 
         timeout = httpx.Timeout(
-            settings.timeout.timeout_op, connect=settings.timeout.timeout_connect
+            self.config.timeout.timeout_op, connect=self.config.timeout.timeout_connect
         )
 
-        self._client = client or httpx.AsyncClient(
+        self._client = httpx.AsyncClient(
             timeout=timeout,
-            verify=settings.verify_ssl,
+            verify=self.config.verify_ssl,
             limits=httpx.Limits(
-                max_connections=settings.max_connections,
-                max_keepalive_connections=settings.max_keepalive_connections,
+                max_connections=self.config.max_connections,
+                max_keepalive_connections=self.config.max_keepalive_connections,
             ),
-            follow_redirects=settings.follow_redirects
+            follow_redirects=self.config.follow_redirects,
         )
 
-        self.default_attempts = settings.default_retry_attempts
+        self.default_attempts = self.config.default_retry_attempts
 
         self._semaphore = None
         self._is_semaphore_enabled = False
-        if settings.semaphore_size > 0:
+        if self.config.semaphore_size > 0:
             self._is_semaphore_enabled = True
-            self._semaphore = asyncio.Semaphore(settings.semaphore_size)
+            self._semaphore = asyncio.Semaphore(self.config.semaphore_size)
 
-        self.default_wait = self._configure_wait(settings.wait)
+        self.default_wait = self._configure_wait(self.config.wait)
 
-    async def aclose(self) -> None:
-        """
-        Close the underlying HTTP client if it is owned by this instance.
-        """
-        if self._owns_client:
+        self._initialized = True
+
+    async def cleanup(self) -> None:
+        """Close HTTPX Client"""
+        if self._client:
+            logger.info("Closing HTTPX Client")
             await self._client.aclose()
+            self._client = None
 
     async def request(
         self,
@@ -134,6 +143,9 @@ class HttpxClient(Extension):
 
         @retry_decorator
         async def _execute() -> httpx.Response:
+            if not self._client:
+                raise Exception("HTTPX Client is not initialized")
+
             try:
                 _resp = await self._client.request(
                     method=method,
@@ -502,14 +514,3 @@ class HttpxClient(Extension):
             max=wait_settings.max,
             exp_base=wait_settings.exp_base,
         )
-
-
-@lru_cache
-def get_http_client() -> HttpxClient:
-    from zee_api.core.config.settings import (
-        get_app_settings,  # Delayed import to avoid circular dependency
-    )
-
-    settings = get_app_settings()
-
-    return HttpxClient(settings.http_config)

@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Optional, Type
+from typing import Any, Type
 
 from fastapi import FastAPI
 
@@ -46,23 +46,20 @@ class ZeeApi:
 
         self._setup_routes()
 
-    def add_extension(
-        self,
-        name: str,
-        extension_class: Type[BaseExtension],
-        config: Optional[dict[str, Any]] = None,
-    ) -> None:
-        """Add an extension to ZeeAPI"""
+    def add_extension(self, name: str, extension_class: Type[BaseExtension]) -> None:
+        """
+        Add an extension to ZeeAPI
+
+        Args:
+            name: extension name, will be used as the key of the extension configuration in yaml file,
+                  if key not present in yaml file, default parameters will be used if accepted
+            extension_class: the type of the extension
+        """
         extension = extension_class(self.app)
 
         self.extension_manager.register(name, extension)
 
-        if config:
-            self._extension_configs[name] = config
-
-    def configure(self, config: dict[str, Any]) -> None:
-        """Configure all extensions"""
-        self._extension_configs.update(config)
+        self._extension_configs[name] = self.settings.model_extra.get(name, {})  # type: ignore[arg-type]
 
     def _setup_routes(self) -> None:
         """Setup routes"""
@@ -80,3 +77,7 @@ class ZeeApi:
     def get_extension(self, name: str) -> BaseExtension:
         """Get extension for use in routes"""
         return self.extension_manager.get(name)
+
+    def __call__(self) -> Any:
+        """Maintain the default behaviour on uvicorn.run"""
+        return self.app
