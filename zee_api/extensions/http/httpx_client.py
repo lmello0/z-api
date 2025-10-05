@@ -38,7 +38,7 @@ class HttpxClient(BaseExtension):
         default_wait (wait_base): Default wait policy for retries.
     """
 
-    def __init__(self, app: Optional[FastAPI] = None) -> None:
+    def __init__(self, app: FastAPI) -> None:
         super().__init__(app)
         self._client: Optional[httpx.AsyncClient] = None
         self.config: Optional[HttpSettings] = None

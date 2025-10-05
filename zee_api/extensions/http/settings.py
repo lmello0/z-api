@@ -4,12 +4,12 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class TimeoutSettings(BaseModel):
+class TimeoutSettings(BaseModel, frozen=True):
     timeout_op: int = 10
     timeout_connect: int = 5
 
 
-class WaitSettings(BaseModel):
+class WaitSettings(BaseModel, frozen=True):
     policy: Literal[
         "exponential",
         "exponential_jitter",
