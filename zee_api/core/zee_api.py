@@ -1,15 +1,20 @@
 import logging
+import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Type
+from typing import Type
 
+import psutil
 from fastapi import FastAPI
+from starlette.types import Receive, Scope, Send
 
 from zee_api.core.config.settings import Settings
 from zee_api.core.extension_manager.base_extension import BaseExtension
 from zee_api.core.extension_manager.extension_manager import ExtensionManager
 from zee_api.core.logging.context.log_context_registry import get_log_context_registry
 from zee_api.core.logging.log_configurator import get_log_configurator
+from zee_api.utils.format_bytes import format_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +22,12 @@ logger = logging.getLogger(__name__)
 class ZeeApi:
     def __init__(self) -> None:
         self.settings = Settings()
-        self._extension_configs = {}
+
         self.extension_manager = ExtensionManager()
+        self._extension_configs = {}
+
+        self.started_at: float = float("-inf")
+        self.current_process = psutil.Process(os.getpid())
 
         log_context_registry = get_log_context_registry()
         for context in self.settings.log_config.log_contexts:
@@ -30,6 +39,8 @@ class ZeeApi:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             await self.extension_manager.init_all(self._extension_configs)
+
+            self.started_at = time.time()
 
             yield
 
@@ -43,6 +54,8 @@ class ZeeApi:
             openapi_url=f"{self.settings.app_context_path}/openapi",
             lifespan=lifespan,
         )
+
+        self.app.state.extension_manager = self.extension_manager
 
         self._setup_routes()
 
@@ -64,12 +77,23 @@ class ZeeApi:
     def _setup_routes(self) -> None:
         """Setup routes"""
 
-        @self.app.get("/healthz")
+        @self.app.get("/healthz", tags=["System"])
         async def healthcheck():
             """Framework health endpoint"""
-            return {"status": "UP", "timestamp": datetime.now().isoformat()}
 
-        @self.app.get("/extensions")
+            uptime = round(time.time() - self.started_at, 2)
+            ram = self.current_process.memory_full_info().rss
+
+            return {
+                "status": "UP",
+                "uptime (seconds)": uptime,
+                "app_name": self.settings.app_name,
+                "app_version": self.settings.app_version,
+                "timestamp": datetime.now().isoformat(),
+                "memory usage (mb)": format_bytes(ram),
+            }
+
+        @self.app.get("/extensions", tags=["System"])
         async def list_extensions():
             """List all registered extensions"""
             return {"extensions": list(self.extension_manager.extensions.keys())}
@@ -78,6 +102,6 @@ class ZeeApi:
         """Get extension for use in routes"""
         return self.extension_manager.get(name)
 
-    def __call__(self) -> Any:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Maintain the default behaviour on uvicorn.run"""
-        return self.app
+        await self.app(scope, receive, send)

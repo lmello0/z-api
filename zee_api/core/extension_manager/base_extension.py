@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -7,7 +7,7 @@ from fastapi import FastAPI
 class BaseExtension(ABC):
     """Base class for all extensions"""
 
-    def __init__(self, app: Optional[FastAPI] = None) -> None:
+    def __init__(self, app: FastAPI) -> None:
         self.app = app
         self._initialized = False
 

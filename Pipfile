@@ -53,6 +53,7 @@ tenacity = "*"
 apscheduler = "*"
 pytest = "*"
 pytest-cov = "*"
+psutil = "*"
 
 [dev-packages]
 

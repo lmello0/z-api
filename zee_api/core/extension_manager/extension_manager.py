@@ -20,6 +20,7 @@ class ExtensionManager:
 
     def register(self, name: str, extension: BaseExtension) -> None:
         """Register an extension"""
+        # TODO: change to return None, instead of raise
         if name in self._extensions:
             raise ValueError(f"Extension '{name}' already registered")
 
