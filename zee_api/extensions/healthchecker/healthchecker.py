@@ -3,10 +3,10 @@ import time
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from zee_api.core.extension_manager.base_extension import BaseExtension
+from zee_api.core.zee_api import ZeeApi
 from zee_api.extensions.healthchecker.healthstate import HealthState
 from zee_api.extensions.healthchecker.service_state import ServiceState
 from zee_api.extensions.healthchecker.settings import (
@@ -18,7 +18,7 @@ from zee_api.extensions.http.httpx_client import HttpxClient
 
 
 class Healthchecker(BaseExtension):
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(self, app: ZeeApi) -> None:
         super().__init__(app)
         self._http_client: Optional[HttpxClient] = None
         self.config: Optional[HealthcheckerSettings] = None
@@ -30,12 +30,7 @@ class Healthchecker(BaseExtension):
         """Initialize Healthchecker"""
         self.settings = HealthcheckerSettings(**config)
 
-        if not getattr(self.app.state, "extension_manager"):
-            raise ValueError("Application does not have a ExtensionManager registered")
-
-        try:
-            self._http_client = self.app.state.extension_manager.get("http_client")
-        except KeyError:
+        if not self.app.get_extension("http_client"):
             raise ValueError(
                 "Application does not have a HttpClient extension registered, healthchecker cannot be used"
             )
@@ -151,7 +146,9 @@ class Healthchecker(BaseExtension):
         )
 
     def _setup_routes(self) -> None:
-        @self.app.get("/readyz", tags=["Healthchecker"])
+        app = self.app.get_app()
+
+        @app.get("/readyz", tags=["Healthchecker"])
         async def readyz():
             overall = self.overall_readiness()
             return JSONResponse(

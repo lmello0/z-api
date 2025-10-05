@@ -3,7 +3,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Type
+from typing import Optional, Type
 
 import psutil
 from fastapi import FastAPI
@@ -68,7 +68,7 @@ class ZeeApi:
                   if key not present in yaml file, default parameters will be used if accepted
             extension_class: the type of the extension
         """
-        extension = extension_class(self.app)
+        extension = extension_class(self)
 
         self.extension_manager.register(name, extension)
 
@@ -98,9 +98,13 @@ class ZeeApi:
             """List all registered extensions"""
             return {"extensions": list(self.extension_manager.extensions.keys())}
 
-    def get_extension(self, name: str) -> BaseExtension:
+    def get_extension(self, name: str) -> Optional[BaseExtension]:
         """Get extension for use in routes"""
         return self.extension_manager.get(name)
+
+    def get_app(self) -> FastAPI:
+        """Return FastAPI instance"""
+        return self.app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Maintain the default behaviour on uvicorn.run"""

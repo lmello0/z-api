@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from zee_api.core.extension_manager.base_extension import BaseExtension
 
@@ -27,10 +27,10 @@ class ExtensionManager:
         self._extensions[name] = extension
         logger.info(f"Registered extension: {name}")
 
-    def get(self, name: str) -> BaseExtension:
+    def get(self, name: str) -> Optional[BaseExtension]:
         """Get an extension by name"""
         if name not in self._extensions:
-            raise KeyError(f"Extension '{name}' not found")
+            return None
 
         return self._extensions[name]
 
@@ -60,6 +60,6 @@ class ExtensionManager:
             f"Cleanup complete. Cleanup ran for {len(self._extensions)} extensions"
         )
 
-    def __getitem__(self, name: str) -> BaseExtension:
+    def __getitem__(self, name: str) -> Optional[BaseExtension]:
         """Allow dictionary-style access"""
         return self.get(name)

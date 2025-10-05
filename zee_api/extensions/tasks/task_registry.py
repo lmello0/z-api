@@ -7,9 +7,9 @@ from types import ModuleType
 from typing import Any, Optional, Type
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import FastAPI
 
 from zee_api.core.extension_manager.base_extension import BaseExtension
+from zee_api.core.zee_api import ZeeApi
 from zee_api.extensions.tasks.settings import TaskModuleSettings
 from zee_api.extensions.tasks.task import Task
 
@@ -42,7 +42,7 @@ class TaskRegistry(BaseExtension):
             Returns a singleton instance of TaskRegistry.
     """
 
-    def __init__(self, app: FastAPI):
+    def __init__(self, app: ZeeApi):
         super().__init__(app)
 
         self._tasks: dict[str, Type[Task]] = {}

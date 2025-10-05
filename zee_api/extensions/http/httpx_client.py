@@ -3,7 +3,6 @@ import logging
 from typing import Any, Literal, Mapping, Optional, Sequence
 
 import httpx
-from fastapi import FastAPI
 from starlette import status
 from tenacity import (
     retry,
@@ -19,6 +18,7 @@ from tenacity import (
 from tenacity.wait import wait_base
 
 from zee_api.core.extension_manager.base_extension import BaseExtension
+from zee_api.core.zee_api import ZeeApi
 from zee_api.extensions.http.settings import HttpSettings, WaitSettings
 
 # TODO: add logs
@@ -38,7 +38,7 @@ class HttpxClient(BaseExtension):
         default_wait (wait_base): Default wait policy for retries.
     """
 
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(self, app: ZeeApi) -> None:
         super().__init__(app)
         self._client: Optional[httpx.AsyncClient] = None
         self.config: Optional[HttpSettings] = None

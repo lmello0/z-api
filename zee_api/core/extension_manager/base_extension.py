@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from fastapi import FastAPI
+if TYPE_CHECKING:
+    from zee_api.core.zee_api import ZeeApi
 
 
 class BaseExtension(ABC):
     """Base class for all extensions"""
 
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(self, app: "ZeeApi") -> None:
         self.app = app
         self._initialized = False
 
