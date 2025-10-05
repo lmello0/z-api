@@ -2,19 +2,21 @@ import importlib
 import inspect
 import logging
 import pkgutil
-from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
-from typing import Optional, Type
+from typing import Any, Optional, Type
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import FastAPI
 
+from zee_api.core.extension_manager.base_extension import BaseExtension
+from zee_api.extensions.tasks.settings import TaskModuleSettings
 from zee_api.extensions.tasks.task import Task
 
 logger = logging.getLogger(__name__)
 
 
-class TaskRegistry:
+class TaskRegistry(BaseExtension):
     """
     TaskRegistry is responsible for managing and scheduling tasks within the application.
 
@@ -40,11 +42,32 @@ class TaskRegistry:
             Returns a singleton instance of TaskRegistry.
     """
 
-    def __init__(self, scheduler: Optional[AsyncIOScheduler] = None):
-        self._tasks: dict[str, Type[Task]] = {}
-        self._scheduler = scheduler or AsyncIOScheduler()
+    def __init__(self, app: FastAPI):
+        super().__init__(app)
 
-    def discover_tasks(self, tasks_package: str) -> None:
+        self._tasks: dict[str, Type[Task]] = {}
+        self._scheduler: Optional[AsyncIOScheduler] = None
+        self.config: Optional[TaskModuleSettings] = None
+
+    async def init(self, config: dict[str, Any]) -> None:
+        """Initialize task module"""
+        self.config = TaskModuleSettings(**config)
+
+        self._scheduler = AsyncIOScheduler()
+        self._discover_tasks(self.config.task_package)
+        self._setup_all_tasks()
+
+        self._scheduler.start()
+
+    async def cleanup(self) -> None:
+        if self._scheduler:
+            logger.info("Shutting down tasks module...")
+            self._scheduler.shutdown(False)
+
+            self._scheduler = None
+            self._tasks.clear()
+
+    def _discover_tasks(self, tasks_package: str) -> None:
         """
         Discovers and registers tasks from the specified package.
 
@@ -89,7 +112,7 @@ class TaskRegistry:
             except (ImportError, AttributeError):
                 logger.warning(f"Failed to register task: {modname}")
 
-    def setup_all_tasks(self) -> None:
+    def _setup_all_tasks(self) -> None:
         """
         Sets up all registered tasks by adding them to the scheduler.
 
@@ -104,6 +127,9 @@ class TaskRegistry:
             try:
                 task_instance = task_class()
 
+                if not self._scheduler:
+                    raise ValueError("Scheduler is None")
+
                 self._scheduler.add_job(
                     func=task_instance.execute, **task_instance.schedule
                 )
@@ -113,26 +139,3 @@ class TaskRegistry:
                 )
             except Exception as e:
                 logger.error(f"Failed to schedule task '{task_name}': {e}")
-
-    def start_scheduler(self) -> None:
-        """
-        Starts the scheduler if it is not already running.
-
-        This method ensures that the scheduler is started only once.
-        """
-        if not self._scheduler.running:
-            self._scheduler.start()
-
-    def shutdown_scheduler(self) -> None:
-        """
-        Shuts down the scheduler if it is currently running.
-
-        This method ensures that the scheduler is properly shut down to release resources.
-        """
-        if self._scheduler.running:
-            self._scheduler.shutdown()
-
-
-@lru_cache
-def get_task_registry() -> TaskRegistry:
-    return TaskRegistry()
