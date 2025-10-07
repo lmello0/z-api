@@ -83,6 +83,9 @@ class ExtensionManager:
         logger.info("Initializing all extensions...")
 
         for name, extension in self._extensions_by_name.items():
+            if extension.initialized:
+                continue
+
             try:
                 await extension.init(config.get(name, {}))
                 logger.info(f"Extension '{name}' initialized successfully")

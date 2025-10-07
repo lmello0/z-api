@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "17e63f729944feb53180bed16d438193fb4b95e4a315e381f2b155d555fee617"
+            "sha256": "a065bf57ab09574c1d9053fe14dc4fa95b876b8688a8073a21834a736c757d28"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -1017,6 +1017,10 @@
             "index": "pypi",
             "markers": "python_version >= '3.9'",
             "version": "==0.37.0"
+        },
+        "zee-api": {
+            "editable": true,
+            "file": "."
         }
     },
     "develop": {}

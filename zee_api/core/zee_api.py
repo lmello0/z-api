@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -6,6 +7,7 @@ from datetime import datetime
 from typing import Callable, Optional, Type
 
 import psutil
+import uvicorn
 from fastapi import FastAPI
 
 from zee_api.core.config.settings import Settings
@@ -57,22 +59,56 @@ class ZeeApi(FastAPI):
 
         self._setup_routes()
 
-    def add_extension(self, extension_class: Type[BaseExtension], config_key: Optional[str] = None) -> None:
+    def add_extension(
+        self,
+        *,
+        extension_instance: Optional[BaseExtension] = None,
+        extension_class: Optional[Type[BaseExtension]] = None,
+        config_key: Optional[str] = None,
+        init_early: bool = False,
+    ) -> None:
         """
         Add an extension to ZeeAPI
 
         Args:
-            extension_class: the type of the extension
-            config_key: the config key of the extension in `application_config.yaml`
+            extension_instance: An instantiated extension object
+            extension_class: The extension class to instantiate (will receive self as argument)
+            config_key: The config key in `application_config.yaml` (defaults to extension.name)
+            init_early: If True, initialize the extension immediately (for middlewares, etc.)
+
+        Raises:
+            ValueError: If neither or both extension parameters are provided
         """
-        extension = extension_class(self)
+
+        if extension_instance is None and extension_class is None:
+            raise ValueError("Either 'extension_instance' or 'extension_class' must be provided")
+
+        if extension_instance is not None and extension_class is not None:
+            raise ValueError("Provide either 'extension_instance' or 'extension_class', not both")
+
+        if extension_instance is not None:
+            extension = extension_instance
+        else:
+            extension = extension_class(self)  # type: ignore[misc]
 
         self.extension_manager.register(extension)
 
-        if not config_key:
-            config_key = extension.name
+        effective_config_key = config_key if config_key is not None else extension.name
+        extension_config = self.settings.model_extra.get(effective_config_key, {})  # type: ignore[arg-type]
 
-        self._extension_configs[extension.name.lower()] = self.settings.model_extra.get(config_key, {})  # type: ignore[arg-type]
+        self._extension_configs[extension.name.lower()] = extension_config
+
+        if init_early:
+            try:
+                loop = asyncio.get_running_loop()
+                asyncio.create_task(self._init_single_extension(extension, extension_config))
+            except RuntimeError:
+                asyncio.run(self._init_single_extension(extension, extension_config))
+
+    async def _init_single_extension(self, extension: BaseExtension, config: dict) -> None:
+        """Initialize a single extension."""
+        logger.info(f"Early initializing extension: {extension.name}")
+        await extension.init(config)
 
     def _setup_routes(self) -> None:
         """Setup routes"""

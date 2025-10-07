@@ -54,6 +54,7 @@ apscheduler = "*"
 pytest = "*"
 pytest-cov = "*"
 psutil = "*"
+zee-api = {file = ".", editable = true}
 
 [dev-packages]
 

@@ -10,7 +10,7 @@ class BaseExtension(ABC):
 
     def __init__(self, app: "ZeeApi") -> None:
         self.app = app
-        self._initialized = False
+        self.initialized = False
 
     @abstractmethod
     async def init(self, config: dict[str, Any]) -> None:
