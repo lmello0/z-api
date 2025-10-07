@@ -6,8 +6,8 @@ from typing import Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from zee_api.core.logging.context import builtins
-from zee_api.core.logging.context.log_context import LogContext
+from zee_api.extensions.logging.context import builtins
+from zee_api.extensions.logging.context.log_context import LogContext
 
 
 class LogContextRegistry:
@@ -57,23 +57,15 @@ class LogContextRegistry:
 
     def get_all_filters(self) -> dict[str, logging.Filter]:
         """Get all filter classes from registered contexts."""
-        return {
-            name: context.create_filter() for name, context in self._contexts.items()
-        }
+        return {name: context.create_filter() for name, context in self._contexts.items()}
 
     def get_all_middlewares(self) -> dict[str, type[BaseHTTPMiddleware]]:
         """Get all middleware classes from registered contexts."""
-        return {
-            name: context.create_middleware()
-            for name, context in self._contexts.items()
-        }
+        return {name: context.create_middleware() for name, context in self._contexts.items()}
 
     def create_filter_config(self) -> dict:
         """Create filter configuration for `logging.yaml`"""
-        return {
-            f"{name}_filter": {"()": lambda ctx=ctx: ctx.create_filter()}
-            for name, ctx in self._contexts.items()
-        }
+        return {f"{name}_filter": {"()": lambda ctx=ctx: ctx.create_filter()} for name, ctx in self._contexts.items()}
 
 
 @lru_cache

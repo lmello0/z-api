@@ -13,8 +13,6 @@ from fastapi import FastAPI
 from zee_api.core.config.settings import Settings
 from zee_api.core.extension_manager.base_extension import BaseExtension
 from zee_api.core.extension_manager.extension_manager import ExtensionManager
-from zee_api.core.logging.context.log_context_registry import get_log_context_registry
-from zee_api.core.logging.log_configurator import get_log_configurator
 from zee_api.utils.format_bytes import format_bytes
 
 logger = logging.getLogger(__name__)
@@ -29,13 +27,6 @@ class ZeeApi(FastAPI):
 
         self.current_process = psutil.Process(os.getpid())
         self.started_at: float = float("-inf")
-
-        log_context_registry = get_log_context_registry()
-        for context in self.settings.log_config.log_contexts:
-            log_context_registry.register_builtin(context)
-
-        log_configurator = get_log_configurator()
-        self.log_config = log_configurator.configure()
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
@@ -91,8 +82,6 @@ class ZeeApi(FastAPI):
         else:
             extension = extension_class(self)  # type: ignore[misc]
 
-        self.extension_manager.register(extension)
-
         effective_config_key = config_key if config_key is not None else extension.name
         extension_config = self.settings.model_extra.get(effective_config_key, {})  # type: ignore[arg-type]
 
@@ -100,10 +89,15 @@ class ZeeApi(FastAPI):
 
         if init_early:
             try:
-                loop = asyncio.get_running_loop()
-                asyncio.create_task(self._init_single_extension(extension, extension_config))
+                asyncio.get_running_loop()
+                logger.warning(
+                    f"Extension '{extension.name}' marked as init_early but called from async context. "
+                    "It will be initialized during lifespan instead."
+                )
             except RuntimeError:
                 asyncio.run(self._init_single_extension(extension, extension_config))
+
+        self.extension_manager.register(extension)
 
     async def _init_single_extension(self, extension: BaseExtension, config: dict) -> None:
         """Initialize a single extension."""
@@ -156,3 +150,7 @@ class ZeeApi(FastAPI):
             return extension
 
         return dependency
+
+    def run(self) -> None:
+        """Start the application"""
+        uvicorn.run(self, host="0.0.0.0", port=8080, log_level=logging.CRITICAL)

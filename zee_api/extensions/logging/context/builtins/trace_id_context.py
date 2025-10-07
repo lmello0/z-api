@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import Request, Response
 
-from zee_api.core.logging.context.log_context import LogContext
+from zee_api.extensions.logging.context.log_context import LogContext
 
 
 class TraceIdContext(LogContext):

@@ -1,35 +1,55 @@
 import logging
 import logging.config
 import os
-from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import yaml
 
-from zee_api.core.config.settings import Settings, get_app_settings
 from zee_api.core.exceptions.invalid_config_file_error import (
     InvalidConfigFileError,
 )
-from zee_api.core.logging.context.log_context_registry import (
-    LogContextRegistry,
-    get_log_context_registry,
-)
+from zee_api.core.extension_manager.base_extension import BaseExtension
+from zee_api.core.zee_api import ZeeApi
+from zee_api.extensions.logging.context.log_context_registry import LogContextRegistry
+from zee_api.extensions.logging.settings import LoggingModuleSettings
 from zee_api.utils.deep_merge_dicts import deep_merge_dicts
 
 
-class LogConfigurator:
-    def __init__(self, settings: Settings, context_registry: LogContextRegistry):
-        self.settings = settings
-        self.context_registry = context_registry
-        self._base_config = None
+class LogConfigurator(BaseExtension):
+    def __init__(self, app: ZeeApi) -> None:
+        super().__init__(app)
+        self._context_registry: LogContextRegistry = LogContextRegistry()
+
+        self.config: Optional[LoggingModuleSettings] = None
+
+        self._base_config: Optional[dict[str, Any]] = None
+
+    async def init(self, config: dict[str, Any]) -> None:
+        self.config = LoggingModuleSettings(**config)
+
+        for context in self.config.log_contexts:
+            self._context_registry.register_builtin(context)
+
+        self.configure()
+
+        for _, context in self._context_registry.contexts.items():
+            self.app.add_middleware(context.create_middleware())
+
+        self.initialized = True
+
+    async def cleanup(self) -> None:
+        pass
 
     @property
     def BASE_LOG_CONFIG(self) -> dict:
         """Generate base config dynamically with registered contexts."""
+        if not self._context_registry:
+            raise ValueError("LogConfigurator is not initialized yet")
+
         if self._base_config is None:
             context_filters = {}
-            for name, context in self.context_registry.contexts.items():
+            for name, context in self._context_registry.contexts.items():
                 filter_instance = context.create_filter()
                 context_filters[f"{name}_filter"] = {"()": lambda f=filter_instance: f}
 
@@ -77,15 +97,17 @@ class LogConfigurator:
 
     def _build_format(self, type: Literal["STANDARD", "ACCESS"]) -> str:
         """Build standard or access format string with all registered contexts."""
+        if not self._context_registry:
+            raise ValueError("LogConfigurator is not initialized yet")
 
         base = "[%(asctime)s][%(levelname)s]"
         if type == "ACCESS":
             base += "[ACCESS]"
 
-        for name in self.context_registry.contexts.keys():
+        for name in self._context_registry.contexts.keys():
             base += f"[{name}: %({name})s]"
 
-        if type == "ACCESS" and "response_time" in self.context_registry.contexts:
+        if type == "ACCESS" and "response_time" in self._context_registry.contexts:
             base += "[response_time_ms: %(response_time_ms)s]"
 
         base += "[%(name)s]: %(message)s"
@@ -103,7 +125,10 @@ class LogConfigurator:
         Returns:
             The current configuration dict
         """
-        custom = self._load_custom_config_file(self.settings.log_config.log_config_path)
+        custom = {}
+        if self.config:
+            custom = self.config.model_extra or {}
+
         merged = deep_merge_dicts(self.BASE_LOG_CONFIG, custom)
 
         if extra:
@@ -162,16 +187,6 @@ class LogConfigurator:
             filters_to_add = all_filter_names - excluded - existing_filter_set
 
             if filters_to_add or existing_filters:
-                handler_config["filters"] = existing_filters + sorted(
-                    list(filters_to_add)
-                )
+                handler_config["filters"] = existing_filters + sorted(list(filters_to_add))
 
         return config
-
-
-@lru_cache
-def get_log_configurator() -> LogConfigurator:
-    settings = get_app_settings()
-    context_registry = get_log_context_registry()
-
-    return LogConfigurator(settings, context_registry)
