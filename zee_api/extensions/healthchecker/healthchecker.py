@@ -30,10 +30,13 @@ class Healthchecker(BaseExtension):
         """Initialize Healthchecker"""
         self.settings = HealthcheckerSettings(**config)
 
-        if not self.app.get_extension("http_client"):
+        http_client = self.app.extension_manager.get(extension_type=HttpxClient)
+        if not http_client:
             raise ValueError(
                 "Application does not have a HttpClient extension registered, healthchecker cannot be used"
             )
+
+        self._http_client = http_client
 
         for service in self.settings.services_config:
             self._services.add(service)
@@ -78,10 +81,7 @@ class Healthchecker(BaseExtension):
         if all(r.state == HealthState.DOWN for r in self._results.values()):
             return HealthState.DOWN
 
-        if any(
-            r.state in (HealthState.DOWN, HealthState.DEGRADED)
-            for r in self._results.values()
-        ):
+        if any(r.state in (HealthState.DOWN, HealthState.DEGRADED) for r in self._results.values()):
             return HealthState.DEGRADED
 
         return HealthState.UP
@@ -122,11 +122,7 @@ class Healthchecker(BaseExtension):
                 state = (
                     HealthState.UP
                     if resp.status_code == svc.expected_status
-                    else (
-                        HealthState.DEGRADED
-                        if 200 <= resp.status_code < 500
-                        else HealthState.DOWN
-                    )
+                    else (HealthState.DEGRADED if 200 <= resp.status_code < 500 else HealthState.DOWN)
                 )
 
                 details = {
@@ -146,9 +142,7 @@ class Healthchecker(BaseExtension):
         )
 
     def _setup_routes(self) -> None:
-        app = self.app.get_app()
-
-        @app.get("/readyz", tags=["Healthchecker"])
+        @self.app.get("/readyz", tags=["Healthchecker"])
         async def readyz():
             overall = self.overall_readiness()
             return JSONResponse(

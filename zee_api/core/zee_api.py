@@ -3,11 +3,10 @@ import os
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Optional, Type
+from typing import Callable, Optional, Type
 
 import psutil
 from fastapi import FastAPI
-from starlette.types import Receive, Scope, Send
 
 from zee_api.core.config.settings import Settings
 from zee_api.core.extension_manager.base_extension import BaseExtension
@@ -19,22 +18,22 @@ from zee_api.utils.format_bytes import format_bytes
 logger = logging.getLogger(__name__)
 
 
-class ZeeApi:
+class ZeeApi(FastAPI):
     def __init__(self) -> None:
         self.settings = Settings()
 
         self.extension_manager = ExtensionManager()
         self._extension_configs = {}
 
-        self.started_at: float = float("-inf")
         self.current_process = psutil.Process(os.getpid())
+        self.started_at: float = float("-inf")
 
         log_context_registry = get_log_context_registry()
         for context in self.settings.log_config.log_contexts:
             log_context_registry.register_builtin(context)
 
         log_configurator = get_log_configurator()
-        log_configurator.configure()
+        self.log_config = log_configurator.configure()
 
         @asynccontextmanager
         async def lifespan(app: FastAPI):
@@ -46,38 +45,39 @@ class ZeeApi:
 
             await self.extension_manager.cleanup_all()
 
-        self.app = FastAPI(
+        super().__init__(
             title=self.settings.app_name,
+            root_path=self.settings.app_context_path,
             version=self.settings.app_version,
-            docs_url=f"{self.settings.app_context_path}/swagger",
-            redoc_url=f"{self.settings.app_context_path}/redoc",
-            openapi_url=f"{self.settings.app_context_path}/openapi",
+            docs_url="/swagger",
+            redoc_url="/redoc",
+            openapi_url="/openapi",
             lifespan=lifespan,
         )
 
-        self.app.state.extension_manager = self.extension_manager
-
         self._setup_routes()
 
-    def add_extension(self, name: str, extension_class: Type[BaseExtension]) -> None:
+    def add_extension(self, extension_class: Type[BaseExtension], config_key: Optional[str] = None) -> None:
         """
         Add an extension to ZeeAPI
 
         Args:
-            name: extension name, will be used as the key of the extension configuration in yaml file,
-                  if key not present in yaml file, default parameters will be used if accepted
             extension_class: the type of the extension
+            config_key: the config key of the extension in `application_config.yaml`
         """
         extension = extension_class(self)
 
-        self.extension_manager.register(name, extension)
+        self.extension_manager.register(extension)
 
-        self._extension_configs[name] = self.settings.model_extra.get(name, {})  # type: ignore[arg-type]
+        if not config_key:
+            config_key = extension.name
+
+        self._extension_configs[extension.name.lower()] = self.settings.model_extra.get(config_key, {})  # type: ignore[arg-type]
 
     def _setup_routes(self) -> None:
         """Setup routes"""
 
-        @self.app.get("/healthz", tags=["System"])
+        @self.get("/healthz", tags=["System"])
         async def healthcheck():
             """Framework health endpoint"""
 
@@ -93,19 +93,30 @@ class ZeeApi:
                 "memory usage (mb)": format_bytes(ram),
             }
 
-        @self.app.get("/extensions", tags=["System"])
+        @self.get("/extensions", tags=["System"])
         async def list_extensions():
             """List all registered extensions"""
             return {"extensions": list(self.extension_manager.extensions.keys())}
 
-    def get_extension(self, name: str) -> Optional[BaseExtension]:
+    def get_extension(
+        self,
+        *,
+        extension_type: Optional[Type[BaseExtension]] = None,
+        name: Optional[str] = None,
+    ) -> Callable:
         """Get extension for use in routes"""
-        return self.extension_manager.get(name)
+        if not extension_type and not name:
+            raise ValueError("'extension_type' or 'name' must be not None")
 
-    def get_app(self) -> FastAPI:
-        """Return FastAPI instance"""
-        return self.app
+        def dependency() -> BaseExtension:
+            extension = self.extension_manager.get(extension_type, name)
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Maintain the default behaviour on uvicorn.run"""
-        await self.app(scope, receive, send)
+            if not extension:
+                if name:
+                    raise ValueError(f"Extension '{name}' not found")
+
+                raise ValueError(f"Extension of type '{extension_type}' not found")
+
+            return extension
+
+        return dependency
